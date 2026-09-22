@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using AuthService.Data;
 using AuthService.Repositories;
@@ -63,6 +64,34 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)
+                    ?? context.Principal?.FindFirst("sub");
+
+                var versionClaim = context.Principal?.FindFirst(JwtService.PasswordVersionClaim);
+
+                if (userIdClaim != null && versionClaim != null
+                    && int.TryParse(userIdClaim.Value, out var userId)
+                    && int.TryParse(versionClaim.Value, out var tokenVersion))
+                {
+                    var dbContext = context.HttpContext.RequestServices
+                        .GetRequiredService<AuthDbContext>();
+
+                    var user = await dbContext.Users
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(u => u.Id == userId);
+
+                    if (user == null || user.PasswordVersion != tokenVersion)
+                    {
+                        context.Fail("Token has been invalidated due to password change.");
+                    }
+                }
+            }
         };
     });
 

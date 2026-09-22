@@ -9,4 +9,10 @@ public class User
     public string Email { get; set; } = string.Empty;
 
     public string PasswordHash { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Incremented each time the password is changed.
+    /// Used to invalidate old JWT tokens when password changes.
+    /// </summary>
+    public int PasswordVersion { get; set; } = 1;
 }

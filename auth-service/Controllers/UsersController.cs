@@ -63,6 +63,36 @@ public class UsersController : ControllerBase
         return user == null ? Unauthorized() : user;
     }
 
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var success = await _authService.ChangePasswordAsync(userId.Value, request);
+            if (!success)
+            {
+                return BadRequest("Current password is incorrect.");
+            }
+
+            return Ok(new { message = "Password changed successfully. Please login again." });
+        }
+        catch (KeyNotFoundException)
+        {
+            return Unauthorized();
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
     private int? GetCurrentUserId()
     {
         var value = User.FindFirstValue(ClaimTypes.NameIdentifier)

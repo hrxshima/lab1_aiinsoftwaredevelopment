@@ -8,6 +8,8 @@ namespace AuthService.Services;
 
 public class JwtService : IJwtService
 {
+    public const string PasswordVersionClaim = "pwd_v";
+
     private readonly IConfiguration _configuration;
 
     public JwtService(IConfiguration configuration)
@@ -31,7 +33,8 @@ public class JwtService : IJwtService
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.Name, user.Name)
+            new Claim(ClaimTypes.Name, user.Name),
+            new Claim(PasswordVersionClaim, user.PasswordVersion.ToString())
         };
 
         var token = new JwtSecurityToken(
