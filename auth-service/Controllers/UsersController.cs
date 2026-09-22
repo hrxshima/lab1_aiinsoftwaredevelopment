@@ -63,6 +63,31 @@ public class UsersController : ControllerBase
         return user == null ? Unauthorized() : user;
     }
 
+    [Authorize]
+    [HttpPut("password")]
+    public async Task<ActionResult<ChangePasswordResponse>> ChangePassword(ChangePasswordRequest request)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var response = await _authService.ChangePasswordAsync(userId.Value, request);
+            return Ok(response);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
     private int? GetCurrentUserId()
     {
         var value = User.FindFirstValue(ClaimTypes.NameIdentifier)

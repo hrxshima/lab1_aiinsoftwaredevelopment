@@ -1,5 +1,6 @@
 using System.Text;
 using AuthService.Data;
+using AuthService.Middleware;
 using AuthService.Repositories;
 using AuthService.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -83,6 +84,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
+app.UseSessionValidation();
 app.UseAuthorization();
 
 app.MapControllers();

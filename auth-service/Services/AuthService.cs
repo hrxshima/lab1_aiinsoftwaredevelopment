@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using AuthService.Dtos;
 using AuthService.Models;
 using AuthService.Repositories;
@@ -49,11 +50,42 @@ public class AuthService : IAuthService
             return null;
         }
 
+        var sessionId = GenerateSessionId();
+        var token = _jwtService.GenerateToken(user, sessionId);
+        var tokenHash = HashToken(token);
+
+        var session = new Session
+        {
+            UserId = user.Id,
+            TokenHash = tokenHash,
+            SessionId = sessionId,
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddHours(12),
+            IsRevoked = false
+        };
+
+        await _userRepository.AddSessionAsync(session);
+
         return new LoginResponse
         {
-            Token = _jwtService.GenerateToken(user),
+            Token = token,
             User = ToResponse(user)
         };
+    }
+
+    private static string GenerateSessionId()
+    {
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace("+", "-")
+            .Replace("/", "_")
+            .TrimEnd('=');
+    }
+
+    private static string HashToken(string token)
+    {
+        using var sha256 = SHA256.Create();
+        var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(token));
+        return Convert.ToBase64String(hashBytes);
     }
 
     public async Task<UserResponse?> GetByIdAsync(int id)
@@ -65,6 +97,78 @@ public class AuthService : IAuthService
 
         var user = await _userRepository.GetByIdAsync(id);
         return user == null ? null : ToResponse(user);
+    }
+
+    public async Task<ChangePasswordResponse> ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        ValidateCurrentPassword(request.CurrentPassword);
+        ValidateNewPassword(request.NewPassword);
+
+        if (request.CurrentPassword == request.NewPassword)
+        {
+            throw new InvalidOperationException("New password must be different from current password.");
+        }
+
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new InvalidOperationException("User not found.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new InvalidOperationException("Current password is incorrect.");
+        }
+
+        var revokedSessionsCount = await _userRepository.GetActiveSessionCountAsync(userId);
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+
+        var updatedUser = await _userRepository.UpdateAsync(user);
+
+        await _userRepository.RevokeUserSessionsAsync(userId);
+
+        return new ChangePasswordResponse
+        {
+            Message = "Password changed successfully. All other sessions have been revoked.",
+            RevokedSessionsCount = revokedSessionsCount
+        };
+    }
+
+    private static void ValidateCurrentPassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new ArgumentException("Current password cannot be empty.");
+        }
+    }
+
+    private static void ValidateNewPassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new ArgumentException("New password cannot be empty.");
+        }
+
+        if (password.Length < 8)
+        {
+            throw new ArgumentException("New password must contain at least 8 characters.");
+        }
+
+        if (!password.Any(char.IsUpper))
+        {
+            throw new ArgumentException("New password must contain at least one uppercase letter.");
+        }
+
+        if (!password.Any(char.IsLower))
+        {
+            throw new ArgumentException("New password must contain at least one lowercase letter.");
+        }
+
+        if (!password.Any(char.IsDigit))
+        {
+            throw new ArgumentException("New password must contain at least one digit.");
+        }
     }
 
     private static void ValidateName(string name)

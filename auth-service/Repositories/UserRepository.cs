@@ -34,4 +34,42 @@ public class UserRepository : IUserRepository
     {
         return _dbContext.Users.AnyAsync(user => user.Email == email);
     }
+
+    public async Task AddSessionAsync(Session session)
+    {
+        _dbContext.Sessions.Add(session);
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task RevokeUserSessionsAsync(int userId)
+    {
+        var activeSessions = await _dbContext.Sessions
+            .Where(s => s.UserId == userId && !s.IsRevoked)
+            .ToListAsync();
+
+        foreach (var session in activeSessions)
+        {
+            session.IsRevoked = true;
+        }
+
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public Task<int> GetActiveSessionCountAsync(int userId)
+    {
+        return _dbContext.Sessions
+            .CountAsync(s => s.UserId == userId && !s.IsRevoked);
+    }
+
+    public async Task<User> UpdateAsync(User user)
+    {
+        _dbContext.Users.Update(user);
+        await _dbContext.SaveChangesAsync();
+        return user;
+    }
+
+    public Task<Session?> GetSessionByIdAsync(string sessionId)
+    {
+        return _dbContext.Sessions.FirstOrDefaultAsync(s => s.SessionId == sessionId);
+    }
 }
