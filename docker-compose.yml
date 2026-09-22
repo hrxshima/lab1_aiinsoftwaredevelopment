@@ -1,0 +1,102 @@
+services:
+  gateway:
+    build:
+      context: ./gateway
+    container_name: gateway
+    ports:
+      - "5004:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+    depends_on:
+      - auth-service
+      - transaction-service
+      - report-service
+
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: auth-service
+    ports:
+      - "5001:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres-auth;Port=5432;Database=auth_db;Username=postgres;Password=postgres
+      Jwt__Issuer: FinanceTracker
+      Jwt__Audience: FinanceTracker
+      Jwt__Secret: finance-tracker-development-secret-key-change-me
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+
+  transaction-service:
+    build:
+      context: ./transaction-service/TransactionService.Api
+    container_name: transaction-service
+    ports:
+      - "5002:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres-transactions;Port=5432;Database=transactions_db;Username=postgres;Password=postgres
+      Jwt__Issuer: FinanceTracker
+      Jwt__Audience: FinanceTracker
+      Jwt__Secret: finance-tracker-development-secret-key-change-me
+    depends_on:
+      postgres-transactions:
+        condition: service_healthy
+
+  report-service:
+    build:
+      context: ./report-service/ReportService.Api
+    container_name: report-service
+    ports:
+      - "5003:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      FinanceService__BaseUrl: http://transaction-service:8080
+      Jwt__Issuer: FinanceTracker
+      Jwt__Audience: FinanceTracker
+      Jwt__Secret: finance-tracker-development-secret-key-change-me
+    depends_on:
+      - transaction-service
+
+  postgres-auth:
+    image: postgres:16
+    container_name: postgres-auth
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - auth-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-transactions:
+    image: postgres:16
+    container_name: postgres-transactions
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: transactions_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - transactions-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d transactions_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  auth-data:
+  transactions-data:
