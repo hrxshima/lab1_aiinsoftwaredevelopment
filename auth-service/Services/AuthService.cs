@@ -7,11 +7,16 @@ namespace AuthService.Services;
 public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
+    private readonly ISessionRepository _sessionRepository;
     private readonly IJwtService _jwtService;
 
-    public AuthService(IUserRepository userRepository, IJwtService jwtService)
+    public AuthService(
+        IUserRepository userRepository,
+        ISessionRepository sessionRepository,
+        IJwtService jwtService)
     {
         _userRepository = userRepository;
+        _sessionRepository = sessionRepository;
         _jwtService = jwtService;
     }
 
@@ -104,5 +109,76 @@ public class AuthService : IAuthService
             Name = user.Name,
             Email = user.Email
         };
+    }
+
+    public async Task<ChangePasswordResponse> ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        ValidatePassword(request.CurrentPassword);
+        ValidateNewPassword(request.NewPassword);
+
+        if (userId <= 0)
+        {
+            throw new ArgumentException("UserId must be greater than zero.");
+        }
+
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new KeyNotFoundException("User not found.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new UnauthorizedAccessException("Current password is incorrect.");
+        }
+
+        if (request.CurrentPassword == request.NewPassword)
+        {
+            throw new InvalidOperationException("New password must be different from the current password.");
+        }
+
+        var revokedSessionsCount = await _sessionRepository.RevokeAllUserSessionsAsync(userId);
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        await _userRepository.UpdateAsync(user);
+
+        return new ChangePasswordResponse
+        {
+            Message = "Password changed successfully. All other sessions have been revoked.",
+            RevokedSessionsCount = revokedSessionsCount
+        };
+    }
+
+    private static void ValidateNewPassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new ArgumentException("New password cannot be empty.");
+        }
+
+        if (password.Length < 8)
+        {
+            throw new ArgumentException("New password must contain at least 8 characters.");
+        }
+
+        if (!password.Any(char.IsUpper))
+        {
+            throw new ArgumentException("New password must contain at least one uppercase letter.");
+        }
+
+        if (!password.Any(char.IsLower))
+        {
+            throw new ArgumentException("New password must contain at least one lowercase letter.");
+        }
+
+        if (!password.Any(char.IsDigit))
+        {
+            throw new ArgumentException("New password must contain at least one digit.");
+        }
+
+        if (!password.Any(c => "!@#$%^&*()_+-=[]{}|;:,.<>?".Contains(c)))
+        {
+            throw new ArgumentException("New password must contain at least one special character.");
+        }
     }
 }
