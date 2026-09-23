@@ -9,6 +9,8 @@ public interface ITransactionService
 
     Task<List<TransactionResponse>> GetByUserAsync(int userId, DateTime? from, DateTime? to, TransactionType? type, int? categoryId);
 
+    Task<PaginatedResponse<TransactionResponse>> GetByUserPaginatedAsync(int userId, DateTime? from, DateTime? to, TransactionType? type, int? categoryId, PaginationRequest pagination);
+
     Task<TransactionResponse?> GetByIdAsync(int id, int userId);
 
     Task<TransactionResponse?> UpdateAsync(int id, int userId, UpdateTransactionRequest request);

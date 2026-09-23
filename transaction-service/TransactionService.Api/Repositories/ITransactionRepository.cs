@@ -10,6 +10,8 @@ public interface ITransactionRepository
 
     Task<List<Transaction>> GetByUserAsync(int userId, DateTime? from, DateTime? to, TransactionType? type, int? categoryId);
 
+    Task<(List<Transaction> Items, int TotalCount)> GetByUserPaginatedAsync(int userId, DateTime? from, DateTime? to, TransactionType? type, int? categoryId, int page, int pageSize);
+
     Task<List<Transaction>> GetReportItemsAsync(int userId, DateTime startDate, DateTime endDate);
 
     Task DeleteAsync(Transaction transaction);

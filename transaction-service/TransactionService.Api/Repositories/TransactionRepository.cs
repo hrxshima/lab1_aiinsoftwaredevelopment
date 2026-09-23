@@ -64,6 +64,44 @@ public class TransactionRepository : ITransactionRepository
             .ToListAsync();
     }
 
+    public async Task<(List<Transaction> Items, int TotalCount)> GetByUserPaginatedAsync(int userId, DateTime? from, DateTime? to, TransactionType? type, int? categoryId, int page, int pageSize)
+    {
+        var query = _dbContext.Transactions
+            .Where(transaction => transaction.UserId == userId);
+
+        if (from.HasValue)
+        {
+            query = query.Where(transaction => transaction.Date >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(transaction => transaction.Date <= to.Value);
+        }
+
+        if (type.HasValue)
+        {
+            query = query.Where(transaction => transaction.Type == type.Value);
+        }
+
+        if (categoryId.HasValue)
+        {
+            query = query.Where(transaction => transaction.CategoryId == categoryId.Value);
+        }
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(transaction => transaction.Date)
+            .ThenByDescending(transaction => transaction.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Include(transaction => transaction.Category)
+            .ToListAsync();
+
+        return (items, totalCount);
+    }
+
     public Task<List<Transaction>> GetReportItemsAsync(int userId, DateTime startDate, DateTime endDate)
     {
         return _dbContext.Transactions
