@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -8,6 +9,8 @@ namespace AuthService.Services;
 
 public class JwtService : IJwtService
 {
+    private const string PasswordChangedAtClaim = "pwd_changed_at";
+
     private readonly IConfiguration _configuration;
 
     public JwtService(IConfiguration configuration)
@@ -26,13 +29,18 @@ public class JwtService : IJwtService
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.Name, user.Name)
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new(ClaimTypes.Name, user.Name)
         };
+
+        if (user.PasswordChangedAt.HasValue)
+        {
+            claims.Add(new Claim(PasswordChangedAtClaim, user.PasswordChangedAt.Value.ToString("O", CultureInfo.InvariantCulture)));
+        }
 
         var token = new JwtSecurityToken(
             issuer: _configuration["Jwt:Issuer"],
@@ -42,5 +50,19 @@ public class JwtService : IJwtService
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    public DateTime? GetTokenIssuedAt(string token)
+    {
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+            return jwtToken.ValidFrom;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
