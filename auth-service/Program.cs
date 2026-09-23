@@ -64,6 +64,51 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var token = context.Request.Headers.Authorization.ToString().Replace("Bearer ", "");
+                if (string.IsNullOrEmpty(token))
+                {
+                    context.Fail("Token is missing.");
+                    return;
+                }
+
+                var serviceProvider = context.HttpContext.RequestServices;
+                var userRepository = serviceProvider.GetRequiredService<IUserRepository>();
+
+                try
+                {
+                    var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                    var jwtToken = handler.ReadJwtToken(token);
+
+                    var userIdClaim = jwtToken.Claims.FirstOrDefault(c =>
+                        c.Type == System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub ||
+                        c.Type == System.Security.Claims.ClaimTypes.NameIdentifier);
+
+                    if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                    {
+                        context.Fail("Invalid token claims.");
+                        return;
+                    }
+
+                    var sessionVersionClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "session_version");
+                    var tokenVersion = sessionVersionClaim != null && int.TryParse(sessionVersionClaim.Value, out var v) ? v : 0;
+
+                    var user = await userRepository.GetByIdAsync(userId);
+                    if (user == null || user.SessionVersion != tokenVersion)
+                    {
+                        context.Fail("Session has been invalidated. Please login again.");
+                    }
+                }
+                catch
+                {
+                    context.Fail("Invalid token.");
+                }
+            }
+        };
     });
 
 builder.Services.AddAuthorization();

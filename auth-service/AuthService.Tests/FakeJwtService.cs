@@ -9,4 +9,9 @@ public class FakeJwtService : IJwtService
     {
         return $"test-token-for-user-{user.Id}";
     }
+
+    public int GetSessionVersionFromToken(string token)
+    {
+        return 0;
+    }
 }
