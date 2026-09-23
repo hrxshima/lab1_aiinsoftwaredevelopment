@@ -1,8 +1,8 @@
 using System;
-using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using report_service.Extensions;
 using report_service.Services;
 
 namespace report_service.Controllers
@@ -34,12 +34,8 @@ namespace report_service.Controllers
                 });
             }
 
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                              ?? User.FindFirst("sub")?.Value
-                              ?? User.FindFirst("userId")?.Value
-                              ?? User.FindFirst("id")?.Value;
-
-            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            var userId = User.GetUserId();
+            if (userId == null)
             {
                 return Unauthorized(new
                 {
@@ -51,7 +47,7 @@ namespace report_service.Controllers
 
             try
             {
-                var transactions = await _financeServiceClient.GetTransactionsForReportAsync(userId, startDate, endDate);
+                var transactions = await _financeServiceClient.GetTransactionsForReportAsync(userId.Value, startDate, endDate);
 
                 var reportSummary = _reportEngine.GenerateSummary(startDate, endDate, transactions);
 

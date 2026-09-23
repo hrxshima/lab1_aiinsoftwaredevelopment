@@ -1,5 +1,5 @@
-using System.Security.Claims;
 using AuthService.Dtos;
+using AuthService.Extensions;
 using AuthService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -53,7 +53,7 @@ public class UsersController : ControllerBase
     [HttpGet("me")]
     public async Task<ActionResult<UserResponse>> GetMe()
     {
-        var userId = GetCurrentUserId();
+        var userId = User.GetUserId();
         if (userId == null)
         {
             return Unauthorized();
@@ -61,13 +61,5 @@ public class UsersController : ControllerBase
 
         var user = await _authService.GetByIdAsync(userId.Value);
         return user == null ? Unauthorized() : user;
-    }
-
-    private int? GetCurrentUserId()
-    {
-        var value = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-
-        return int.TryParse(value, out var userId) ? userId : null;
     }
 }

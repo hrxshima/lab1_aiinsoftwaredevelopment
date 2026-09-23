@@ -15,7 +15,7 @@ namespace report_service.DTO
         public decimal Amount { get; set; }
 
         [JsonPropertyName("type")]
-        public string Type { get; set; } = string.Empty; 
+        public string Type { get; set; } = string.Empty;
 
         [JsonPropertyName("date")]
         public DateTime Date { get; set; }
