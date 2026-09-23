@@ -20,6 +20,13 @@ public class UserRepository : IUserRepository
         return user;
     }
 
+    public async Task<User> UpdateAsync(User user)
+    {
+        _dbContext.Users.Update(user);
+        await _dbContext.SaveChangesAsync();
+        return user;
+    }
+
     public Task<User?> GetByIdAsync(int id)
     {
         return _dbContext.Users.FirstOrDefaultAsync(user => user.Id == id);
