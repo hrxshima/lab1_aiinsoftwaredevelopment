@@ -67,6 +67,32 @@ public class AuthService : IAuthService
         return user == null ? null : ToResponse(user);
     }
 
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        ValidatePassword(request.NewPassword);
+
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new InvalidOperationException("User not found.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new ArgumentException("Current password is incorrect.");
+        }
+
+        if (BCrypt.Net.BCrypt.Verify(request.NewPassword, user.PasswordHash))
+        {
+            throw new ArgumentException("New password must be different from the current password.");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.PasswordChangedAt = DateTime.UtcNow;
+
+        await _userRepository.UpdateAsync(user);
+    }
+
     private static void ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))

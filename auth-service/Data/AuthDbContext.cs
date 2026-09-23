@@ -24,5 +24,9 @@ public class AuthDbContext : DbContext
         modelBuilder.Entity<User>()
             .HasIndex(user => user.Email)
             .IsUnique();
+
+        modelBuilder.Entity<User>()
+            .Property(user => user.PasswordChangedAt)
+            .IsRequired(false);
     }
 }
