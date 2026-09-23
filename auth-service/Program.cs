@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using AuthService.Data;
 using AuthService.Repositories;
@@ -63,6 +64,49 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var passwordChangedAtClaim = context.Principal?.FindFirst("password_changed_at")?.Value;
+
+                if (string.IsNullOrEmpty(userIdClaim) || string.IsNullOrEmpty(passwordChangedAtClaim))
+                {
+                    context.Fail("Invalid token claims.");
+                    return;
+                }
+
+                if (!int.TryParse(userIdClaim, out var userId))
+                {
+                    context.Fail("Invalid user ID in token.");
+                    return;
+                }
+
+                if (!DateTime.TryParse(passwordChangedAtClaim, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.RoundtripKind, out var tokenPasswordChangedAt))
+                {
+                    context.Fail("Invalid password changed timestamp in token.");
+                    return;
+                }
+
+                using var scope = context.HttpContext.RequestServices.CreateScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+                var user = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+
+                if (user == null)
+                {
+                    context.Fail("User not found.");
+                    return;
+                }
+
+                if (user.PasswordChangedAt > tokenPasswordChangedAt)
+                {
+                    context.Fail("Token is invalid due to password change. Please login again.");
+                }
+            }
         };
     });
 
