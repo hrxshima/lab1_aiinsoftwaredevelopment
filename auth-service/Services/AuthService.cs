@@ -67,6 +67,37 @@ public class AuthService : IAuthService
         return user == null ? null : ToResponse(user);
     }
 
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        if (userId <= 0)
+        {
+            throw new ArgumentException("UserId must be greater than zero.");
+        }
+
+        ValidateCurrentPassword(request.CurrentPassword);
+        ValidateNewPassword(request.NewPassword);
+
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new ArgumentException("User not found.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new ArgumentException("Current password is incorrect.");
+        }
+
+        if (request.CurrentPassword == request.NewPassword)
+        {
+            throw new ArgumentException("New password must be different from the current password.");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.PasswordTokenVersion += 1;
+        await _userRepository.UpdateAsync(user);
+    }
+
     private static void ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -88,6 +119,42 @@ public class AuthService : IAuthService
         if (string.IsNullOrWhiteSpace(password) || password.Length < 6)
         {
             throw new ArgumentException("Password must contain at least 6 characters.");
+        }
+    }
+
+    private static void ValidateCurrentPassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new ArgumentException("Current password cannot be empty.");
+        }
+    }
+
+    private static void ValidateNewPassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new ArgumentException("New password cannot be empty.");
+        }
+
+        if (password.Length < 8)
+        {
+            throw new ArgumentException("New password must contain at least 8 characters.");
+        }
+
+        if (!password.Any(char.IsLetter))
+        {
+            throw new ArgumentException("New password must contain at least one letter.");
+        }
+
+        if (!password.Any(char.IsDigit))
+        {
+            throw new ArgumentException("New password must contain at least one digit.");
+        }
+
+        if (!password.Any(char.IsUpper))
+        {
+            throw new ArgumentException("New password must contain at least one uppercase letter.");
         }
     }
 
