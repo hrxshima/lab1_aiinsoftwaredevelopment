@@ -43,6 +43,25 @@ public class TransactionService : ITransactionService
         return transactions.Select(ToResponse).ToList();
     }
 
+    public async Task<PaginatedResponse<TransactionResponse>> GetByUserPaginatedAsync(int userId, DateTime? from, DateTime? to, TransactionType? type, int? categoryId, PaginationRequest pagination)
+    {
+        ValidateUserId(userId);
+        ValidateType(type);
+
+        var (transactions, totalCount) = await _transactionRepository.GetByUserPaginatedAsync(
+            userId, from, to, type, categoryId, pagination.Page, pagination.PageSize);
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pagination.PageSize);
+
+        return new PaginatedResponse<TransactionResponse>(
+            transactions.Select(ToResponse).ToList(),
+            pagination.Page,
+            pagination.PageSize,
+            totalCount,
+            totalPages
+        );
+    }
+
     public async Task<TransactionResponse?> GetByIdAsync(int id, int userId)
     {
         ValidateUserId(userId);

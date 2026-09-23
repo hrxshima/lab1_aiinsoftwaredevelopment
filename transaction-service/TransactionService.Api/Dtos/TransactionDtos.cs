@@ -59,3 +59,17 @@ public class TransactionReportResponse
 
     public DateTime Date { get; set; }
 }
+
+public record PaginationRequest(int Page = 1, int PageSize = 20)
+{
+    public int Page { get; init; } = Page > 0 ? Page : 1;
+    public int PageSize { get; init; } = PageSize > 0 && PageSize <= 100 ? PageSize : 20;
+}
+
+public record PaginatedResponse<T>(
+    List<T> Items,
+    int Page,
+    int PageSize,
+    int TotalCount,
+    int TotalPages
+);

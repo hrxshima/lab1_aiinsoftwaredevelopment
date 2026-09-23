@@ -200,6 +200,76 @@ public class TransactionServiceTests
         Assert.Equal(TransactionType.Expense, result[0].Type);
     }
 
+    [Fact]
+    public async Task GetByUserPaginatedAsync_ReturnsCorrectPage()
+    {
+        using var dbContext = TestDb.CreateContext();
+        var food = await AddCategory(dbContext, 1, "Food");
+        for (int i = 1; i <= 5; i++)
+        {
+            await AddTransaction(dbContext, 1, food.Id, i * 100, TransactionType.Expense, new DateTime(2026, 5, i));
+        }
+
+        var service = TestDb.CreateTransactionService(dbContext);
+        var result = await service.GetByUserPaginatedAsync(1, null, null, null, null, new PaginationRequest(2, 2));
+
+        Assert.Equal(2, result.Items.Count);
+        Assert.Equal(5, result.TotalCount);
+        Assert.Equal(3, result.TotalPages);
+        Assert.Equal(2, result.Page);
+        Assert.Equal(2, result.PageSize);
+    }
+
+    [Fact]
+    public async Task GetByUserPaginatedAsync_ReturnsOnlyUserTransactions()
+    {
+        using var dbContext = TestDb.CreateContext();
+        var food = await AddCategory(dbContext, 1, "Food");
+        var taxi = await AddCategory(dbContext, 2, "Taxi");
+        await AddTransaction(dbContext, 1, food.Id, 500, TransactionType.Expense, new DateTime(2026, 5, 10));
+        await AddTransaction(dbContext, 2, taxi.Id, 300, TransactionType.Expense, new DateTime(2026, 5, 11));
+
+        var service = TestDb.CreateTransactionService(dbContext);
+        var result = await service.GetByUserPaginatedAsync(1, null, null, null, null, new PaginationRequest(1, 10));
+
+        Assert.Single(result.Items);
+        Assert.Equal(1, result.TotalCount);
+    }
+
+    [Fact]
+    public async Task GetByUserPaginatedAsync_FiltersByDateTypeAndCategory()
+    {
+        using var dbContext = TestDb.CreateContext();
+        var food = await AddCategory(dbContext, 1, "Food");
+        var salary = await AddCategory(dbContext, 1, "Salary");
+
+        await AddTransaction(dbContext, 1, food.Id, 500, TransactionType.Expense, new DateTime(2026, 5, 10));
+        await AddTransaction(dbContext, 1, food.Id, 100, TransactionType.Expense, new DateTime(2026, 6, 1));
+        await AddTransaction(dbContext, 1, salary.Id, 1000, TransactionType.Income, new DateTime(2026, 5, 15));
+
+        var service = TestDb.CreateTransactionService(dbContext);
+        var result = await service.GetByUserPaginatedAsync(
+            1,
+            new DateTime(2026, 5, 1),
+            new DateTime(2026, 5, 31),
+            TransactionType.Expense,
+            food.Id,
+            new PaginationRequest(1, 10));
+
+        Assert.Single(result.Items);
+        Assert.Equal(500, result.Items[0].Amount);
+    }
+
+    [Fact]
+    public async Task GetByUserPaginatedAsync_ThrowsWhenUserIdIsInvalid()
+    {
+        using var dbContext = TestDb.CreateContext();
+        var service = TestDb.CreateTransactionService(dbContext);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.GetByUserPaginatedAsync(0, null, null, null, null, new PaginationRequest()));
+    }
+
     private static async Task<Category> AddCategory(AppDbContext dbContext, int userId, string name)
     {
         var category = new Category { UserId = userId, Name = name };

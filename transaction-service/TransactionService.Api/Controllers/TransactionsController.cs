@@ -62,6 +62,33 @@ public class TransactionsController : ControllerBase
         }
     }
 
+    [HttpGet("paged")]
+    public async Task<ActionResult<PaginatedResponse<TransactionResponse>>> GetByUserPaged(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] TransactionType? type,
+        [FromQuery] int? categoryId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var userId = User.GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var pagination = new PaginationRequest(page, pageSize);
+            return await _transactionService.GetByUserPaginatedAsync(
+                userId.Value, from, to, type, categoryId, pagination);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TransactionResponse>> GetById(int id)
     {
