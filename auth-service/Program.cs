@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using AuthService.Data;
 using AuthService.Repositories;
@@ -63,6 +64,36 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? context.Principal?.FindFirst("sub")?.Value;
+
+                var tokenVersionClaim = context.Principal?.FindFirst("token_version")?.Value;
+
+                if (string.IsNullOrEmpty(userIdClaim) || string.IsNullOrEmpty(tokenVersionClaim))
+                {
+                    return;
+                }
+
+                if (!int.TryParse(userIdClaim, out var userId) || !int.TryParse(tokenVersionClaim, out var tokenVersion))
+                {
+                    return;
+                }
+
+                using var scope = context.HttpContext.RequestServices.CreateScope();
+                var userRepository = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+                var user = await userRepository.GetByIdAsync(userId);
+
+                if (user == null || user.PasswordTokenVersion != tokenVersion)
+                {
+                    context.Fail("Token has been revoked due to password change.");
+                }
+            }
         };
     });
 
