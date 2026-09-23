@@ -17,6 +17,6 @@ public static class TestDb
 
     public static Services.AuthService CreateAuthService(AuthDbContext dbContext)
     {
-        return new Services.AuthService(new UserRepository(dbContext), new FakeJwtService());
+        return new Services.AuthService(new UserRepository(dbContext), new FakeJwtService(), dbContext);
     }
 }
