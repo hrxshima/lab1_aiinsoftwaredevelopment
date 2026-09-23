@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 from dataclasses import dataclass, field
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SOLUTION = "FinanceTracker.sln"
 
 
 @dataclass
@@ -188,6 +192,46 @@ def check_test_db(source_path: Path, result: CheckResult):
                 )
 
 
+def run_dotnet(args: list[str]) -> subprocess.CompletedProcess:
+    """Запуск dotnet CLI от корня репозитория с захватом вывода."""
+    return subprocess.run(
+        ["dotnet", *args],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+
+def check_dotnet_format(result: CheckResult):
+    """Линтер: dotnet format --verify-no-changes по всему solution"""
+    proc = run_dotnet(["format", SOLUTION, "--verify-no-changes"])
+    if proc.returncode == 0:
+        print("  ✅ dotnet format: форматирование в порядке")
+        return
+
+    lines = [l for l in (proc.stdout + proc.stderr).splitlines() if l.strip()]
+    if not lines:
+        lines = [f"процесс завершился с кодом {proc.returncode}"]
+    shown = "\n".join("  " + l for l in lines[:25])
+    result.add_error(
+        f"dotnet format: есть файлы, требующие форматирования. Запустите `dotnet format {SOLUTION}`.\n{shown}"
+    )
+
+
+def check_tests(result: CheckResult):
+    """Запуск юнит-тестов по всему solution"""
+    proc = run_dotnet(["test", SOLUTION])
+    if proc.returncode == 0:
+        print("  ✅ Тесты успешно пройдены")
+        return
+
+    last_lines = [l for l in (proc.stdout + proc.stderr).splitlines() if l.strip()][-15:]
+    shown = "\n".join("  " + l for l in last_lines)
+    result.add_error(
+        f"Тесты не прошли (код {proc.returncode}).\n{shown}"
+    )
+
+
 def main():
     services = ["auth-service", "gateway", "report-service", "transaction-service"]
     source_paths = [Path(s) for s in services if Path(s).exists()]
@@ -214,6 +258,10 @@ def main():
             print(f"[{i}/{len(checks)}] {title}...")
             check(source_path, result)
 
+    print("\n🧰 Глобальные проверки всего solution...")
+    check_dotnet_format(result)
+    check_tests(result)
+
     print("\n" + "=" * 60)
 
     if result.warnings:
@@ -222,7 +270,7 @@ def main():
             print(f"  {warning}")
 
     if result.errors:
-        print("❌ Ошибки конвенций:")
+        print("❌ Ошибки проверок:")
         for error in result.errors:
             print(f"  {error}")
         print("\n💡 Проверьте AGENTS.md для получения подробной информации о правилах")
