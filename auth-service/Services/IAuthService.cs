@@ -9,4 +9,6 @@ public interface IAuthService
     Task<LoginResponse?> LoginAsync(LoginUserRequest request);
 
     Task<UserResponse?> GetByIdAsync(int id);
+
+    Task ChangePasswordAsync(int userId, ChangePasswordRequest request);
 }

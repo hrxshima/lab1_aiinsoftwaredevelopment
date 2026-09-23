@@ -34,4 +34,37 @@ public class UserRepository : IUserRepository
     {
         return _dbContext.Users.AnyAsync(user => user.Email == email);
     }
+
+    public async Task UpdatePasswordHashAsync(int userId, string newPasswordHash)
+    {
+        var user = await _dbContext.Users.FindAsync(userId);
+        if (user != null)
+        {
+            user.PasswordHash = newPasswordHash;
+            await _dbContext.SaveChangesAsync();
+        }
+    }
+
+    public async Task AddSessionAsync(UserSession session)
+    {
+        _dbContext.UserSessions.Add(session);
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task DeleteSessionsByUserIdAsync(int userId)
+    {
+        var sessions = await _dbContext.UserSessions
+            .Where(s => s.UserId == userId)
+            .ToListAsync();
+
+        _dbContext.UserSessions.RemoveRange(sessions);
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public Task<UserSession?> GetSessionByTokenHashAsync(string tokenHash)
+    {
+        return _dbContext.UserSessions
+            .Include(s => s.User)
+            .FirstOrDefaultAsync(s => s.SessionTokenHash == tokenHash);
+    }
 }
