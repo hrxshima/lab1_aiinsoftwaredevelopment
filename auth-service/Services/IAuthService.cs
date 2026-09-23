@@ -9,4 +9,12 @@ public interface IAuthService
     Task<LoginResponse?> LoginAsync(LoginUserRequest request);
 
     Task<UserResponse?> GetByIdAsync(int id);
+
+    Task ChangePasswordAsync(int userId, ChangePasswordRequest request);
+
+    Task CreateSessionAsync(int userId, string token, DateTime expiresAt);
+
+    Task InvalidateUserSessionsAsync(int userId);
+
+    Task<bool> ValidateSessionAsync(string token);
 }
