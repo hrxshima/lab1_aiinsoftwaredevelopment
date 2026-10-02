@@ -49,9 +49,20 @@ public class AuthService : IAuthService
             return null;
         }
 
+        var token = _jwtService.GenerateToken(user);
+
+        var session = new UserSession
+        {
+            UserId = user.Id,
+            SessionTokenHash = HashToken(token),
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddHours(12)
+        };
+        await _userRepository.AddSessionAsync(session);
+
         return new LoginResponse
         {
-            Token = _jwtService.GenerateToken(user),
+            Token = token,
             User = ToResponse(user)
         };
     }
@@ -65,6 +76,33 @@ public class AuthService : IAuthService
 
         var user = await _userRepository.GetByIdAsync(id);
         return user == null ? null : ToResponse(user);
+    }
+
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        ValidateCurrentPassword(request.CurrentPassword);
+        ValidatePassword(request.NewPassword);
+
+        if (request.CurrentPassword == request.NewPassword)
+        {
+            throw new ArgumentException("New password must be different from current password.");
+        }
+
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new ArgumentException("User not found.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new ArgumentException("Current password is incorrect.");
+        }
+
+        var newPasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        await _userRepository.UpdatePasswordHashAsync(userId, newPasswordHash);
+
+        await _userRepository.DeleteSessionsByUserIdAsync(userId);
     }
 
     private static void ValidateName(string name)
@@ -91,6 +129,14 @@ public class AuthService : IAuthService
         }
     }
 
+    private static void ValidateCurrentPassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new ArgumentException("Current password is required.");
+        }
+    }
+
     private static string NormalizeEmail(string email)
     {
         return email.Trim().ToLowerInvariant();
@@ -104,5 +150,13 @@ public class AuthService : IAuthService
             Name = user.Name,
             Email = user.Email
         };
+    }
+
+    private static string HashToken(string token)
+    {
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(token);
+        var hash = sha256.ComputeHash(bytes);
+        return Convert.ToBase64String(hash);
     }
 }
