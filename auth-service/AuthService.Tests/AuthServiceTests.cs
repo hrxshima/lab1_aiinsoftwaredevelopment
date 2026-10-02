@@ -135,4 +135,161 @@ public class AuthServiceTests
         Assert.Equal("User", result.Name);
         Assert.Equal("user@example.com", result.Email);
     }
+
+    [Fact]
+    public async Task ChangePasswordAsync_SuccessfullyChangesPasswordAndIncrementsVersion()
+    {
+        using var dbContext = TestDb.CreateContext();
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass123"),
+            PasswordTokenVersion = 0
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        await service.ChangePasswordAsync(1, new ChangePasswordRequest
+        {
+            CurrentPassword = "OldPass123",
+            NewPassword = "NewPass456!"
+        });
+
+        var user = dbContext.Users.Single();
+        Assert.True(BCrypt.Net.BCrypt.Verify("NewPass456!", user.PasswordHash));
+        Assert.False(BCrypt.Net.BCrypt.Verify("OldPass123", user.PasswordHash));
+        Assert.Equal(1, user.PasswordTokenVersion);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsWhenCurrentPasswordIsIncorrect()
+    {
+        using var dbContext = TestDb.CreateContext();
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass123")
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.ChangePasswordAsync(1, new ChangePasswordRequest
+        {
+            CurrentPassword = "WrongPassword",
+            NewPassword = "NewPass456!"
+        }));
+
+        Assert.Equal("Current password is incorrect.", exception.Message);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsWhenNewPasswordSameAsCurrent()
+    {
+        using var dbContext = TestDb.CreateContext();
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("SamePass123")
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.ChangePasswordAsync(1, new ChangePasswordRequest
+        {
+            CurrentPassword = "SamePass123",
+            NewPassword = "SamePass123"
+        }));
+
+        Assert.Equal("New password must be different from the current password.", exception.Message);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsWhenNewPasswordTooShort()
+    {
+        using var dbContext = TestDb.CreateContext();
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass123")
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.ChangePasswordAsync(1, new ChangePasswordRequest
+        {
+            CurrentPassword = "OldPass123",
+            NewPassword = "Short1A"
+        }));
+
+        Assert.Contains("at least 8 characters", exception.Message);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsWhenNewPasswordWithoutUppercase()
+    {
+        using var dbContext = TestDb.CreateContext();
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass123")
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.ChangePasswordAsync(1, new ChangePasswordRequest
+        {
+            CurrentPassword = "OldPass123",
+            NewPassword = "newpass123"
+        }));
+
+        Assert.Contains("uppercase letter", exception.Message);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsWhenNewPasswordWithoutDigit()
+    {
+        using var dbContext = TestDb.CreateContext();
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass123")
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.ChangePasswordAsync(1, new ChangePasswordRequest
+        {
+            CurrentPassword = "OldPass123",
+            NewPassword = "NewPasswordA"
+        }));
+
+        Assert.Contains("at least one digit", exception.Message);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsWhenUserNotFound()
+    {
+        using var dbContext = TestDb.CreateContext();
+        var service = TestDb.CreateAuthService(dbContext);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.ChangePasswordAsync(999, new ChangePasswordRequest
+        {
+            CurrentPassword = "OldPass123",
+            NewPassword = "NewPass456!"
+        }));
+
+        Assert.Equal("User not found.", exception.Message);
+    }
 }
