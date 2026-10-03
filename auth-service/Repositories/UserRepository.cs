@@ -34,4 +34,14 @@ public class UserRepository : IUserRepository
     {
         return _dbContext.Users.AnyAsync(user => user.Email == email);
     }
+
+    public async Task UpdatePasswordHashAsync(int userId, string passwordHash)
+    {
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        if (user != null)
+        {
+            user.PasswordHash = passwordHash;
+            await _dbContext.SaveChangesAsync();
+        }
+    }
 }

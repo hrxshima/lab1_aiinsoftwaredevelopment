@@ -11,4 +11,6 @@ public interface IUserRepository
     Task<User?> GetByEmailAsync(string email);
 
     Task<bool> EmailExistsAsync(string email);
+
+    Task UpdatePasswordHashAsync(int userId, string passwordHash);
 }
