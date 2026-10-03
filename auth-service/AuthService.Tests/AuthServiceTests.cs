@@ -135,4 +135,111 @@ public class AuthServiceTests
         Assert.Equal("User", result.Name);
         Assert.Equal("user@example.com", result.Email);
     }
+
+    [Fact]
+    public async Task ChangePasswordAsync_UpdatesPasswordAndPasswordChangedAt()
+    {
+        using var dbContext = TestDb.CreateContext();
+        var originalPasswordChangedAt = DateTime.UtcNow.AddHours(-1);
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("old-password"),
+            PasswordChangedAt = originalPasswordChangedAt
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        await service.ChangePasswordAsync(1, new ChangePasswordRequest
+        {
+            CurrentPassword = "old-password",
+            NewPassword = "new-password123"
+        });
+
+        var user = dbContext.Users.Single();
+        Assert.True(BCrypt.Net.BCrypt.Verify("new-password123", user.PasswordHash));
+        Assert.True(user.PasswordChangedAt > originalPasswordChangedAt);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsForInvalidCurrentPassword()
+    {
+        using var dbContext = TestDb.CreateContext();
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("correct-password")
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.ChangePasswordAsync(1, new ChangePasswordRequest
+            {
+                CurrentPassword = "wrong-password",
+                NewPassword = "new-password123"
+            }));
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsWhenNewPasswordSameAsCurrent()
+    {
+        using var dbContext = TestDb.CreateContext();
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("same-password")
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ChangePasswordAsync(1, new ChangePasswordRequest
+            {
+                CurrentPassword = "same-password",
+                NewPassword = "same-password"
+            }));
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsWhenNewPasswordTooShort()
+    {
+        using var dbContext = TestDb.CreateContext();
+        dbContext.Users.Add(new User
+        {
+            Name = "User",
+            Email = "user@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("correct-password")
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = TestDb.CreateAuthService(dbContext);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.ChangePasswordAsync(1, new ChangePasswordRequest
+            {
+                CurrentPassword = "correct-password",
+                NewPassword = "short"
+            }));
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ThrowsWhenUserNotFound()
+    {
+        using var dbContext = TestDb.CreateContext();
+        var service = TestDb.CreateAuthService(dbContext);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ChangePasswordAsync(999, new ChangePasswordRequest
+            {
+                CurrentPassword = "password",
+                NewPassword = "new-password123"
+            }));
+    }
 }
