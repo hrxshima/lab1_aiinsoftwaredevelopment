@@ -9,4 +9,9 @@ public class FakeJwtService : IJwtService
     {
         return $"test-token-for-user-{user.Id}";
     }
+
+    public DateTime? GetTokenIssuedAt(string token)
+    {
+        return DateTime.UtcNow;
+    }
 }
