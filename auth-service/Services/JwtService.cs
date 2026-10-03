@@ -8,6 +8,8 @@ namespace AuthService.Services;
 
 public class JwtService : IJwtService
 {
+    private const string SessionVersionClaim = "session_version";
+
     private readonly IConfiguration _configuration;
 
     public JwtService(IConfiguration configuration)
@@ -31,7 +33,8 @@ public class JwtService : IJwtService
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.Name, user.Name)
+            new Claim(ClaimTypes.Name, user.Name),
+            new Claim(SessionVersionClaim, user.SessionVersion.ToString())
         };
 
         var token = new JwtSecurityToken(
@@ -42,5 +45,20 @@ public class JwtService : IJwtService
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    public int GetSessionVersionFromToken(string token)
+    {
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+            var versionClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == SessionVersionClaim);
+            return versionClaim != null && int.TryParse(versionClaim.Value, out var version) ? version : 0;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 }
